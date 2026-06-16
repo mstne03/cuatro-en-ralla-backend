@@ -45,21 +45,25 @@ async def game_ws(
     await websocket.send_json({
         "type": "state",
         "board": room.board.to_dict(),
-        "current_turn": room.current_turn,
-        "state": room.state,
+        "current_turn": room.current_turn.value,
+        "state": room.state.value,
         "your_role": "player1" if uid == room.player1_uid else "player2",
     })
 
     if room.full() and len(room.connections) == 2:
         for conn in room.connections.values():
-            await conn.send_json({"type": "start", "state": RoomState.IN_PROGRESS})
+            await conn.send_json({"type": "start", "state": RoomState.IN_PROGRESS.value})
 
     try:
         while True:
             raw = await websocket.receive_text()
             msg = json.loads(raw)
 
-            if msg.get("type") != "move":
+            msg_type = msg.get("type")
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+            if msg_type != "move":
                 continue
 
             col = int(msg.get("col", -1))
@@ -73,8 +77,8 @@ async def game_ws(
                 "type": "move",
                 "col": col,
                 "board": move_result["board"],
-                "current_turn": move_result["current_turn"],
-                "result": move_result["result"],
+                "current_turn": move_result["current_turn"].value,
+                "result": move_result["result"].value,
             }
             for conn in room.connections.values():
                 await conn.send_json(broadcast)
