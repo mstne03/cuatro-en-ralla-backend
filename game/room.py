@@ -53,3 +53,6 @@ class GameRoom:
 
     def full(self) -> bool:
         return self.player1_uid is not None and self.player2_uid is not None
+
+    def player_count(self) -> int:
+        return sum(1 for uid in (self.player1_uid, self.player2_uid) if uid is not None)
