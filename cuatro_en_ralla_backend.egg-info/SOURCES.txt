@@ -1,0 +1,8 @@
+pyproject.toml
+cuatro_en_ralla_backend.egg-info/PKG-INFO
+cuatro_en_ralla_backend.egg-info/SOURCES.txt
+cuatro_en_ralla_backend.egg-info/dependency_links.txt
+cuatro_en_ralla_backend.egg-info/requires.txt
+cuatro_en_ralla_backend.egg-info/top_level.txt
+game/__init__.py
+routers/__init__.py
