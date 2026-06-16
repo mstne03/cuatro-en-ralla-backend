@@ -16,6 +16,17 @@ async def _verify_ws_token(token: str | None) -> dict | None:
         return None
 
 
+async def _send_state(websocket: WebSocket, room, uid: str) -> None:
+    await websocket.send_json({
+        "type": "state",
+        "board": room.board.to_dict(),
+        "current_turn": room.current_turn.value,
+        "state": room.state.value,
+        "your_role": "player1" if uid == room.player1_uid else "player2",
+        "players": room.player_count(),
+    })
+
+
 @router.websocket("/ws/{room_id}")
 async def game_ws(
     websocket: WebSocket,
@@ -39,10 +50,9 @@ async def game_ws(
 
     # Assign player slot
     if uid == room.player1_uid or uid == room.player2_uid:
-        # Reconnect — already in room
-        pass
+        pass  # reconnect
     elif not room.full():
-        slot = room.join(uid)
+        room.join(uid)
         if room.full():
             room.state = RoomState.IN_PROGRESS
     else:
@@ -50,24 +60,21 @@ async def game_ws(
         await websocket.close(code=4003)
         return
 
+    # Register connection (replaces stale socket if player reconnected)
     room.connections[uid] = websocket
 
-    # Send current state to the newly connected player
-    await websocket.send_json({
-        "type": "state",
-        "board": room.board.to_dict(),
-        "current_turn": room.current_turn.value,
-        "state": room.state.value,
-        "your_role": "player1" if uid == room.player1_uid else "player2",
-        "players": room.player_count(),
-    })
+    # Send this player their current state
+    await _send_state(websocket, room, uid)
 
-    # Notify both players when room becomes full
-    if room.full() and len(room.connections) == 2:
-        for conn in room.connections.values():
+    # When second player connects: push a fresh state to ALL players
+    # This ensures player1 sees the game start even if they missed events
+    if room.state == RoomState.IN_PROGRESS and len(room.connections) == 2:
+        for conn_uid, conn in room.connections.items():
             await conn.send_json({
                 "type": "start",
                 "state": RoomState.IN_PROGRESS.value,
+                "your_role": "player1" if conn_uid == room.player1_uid else "player2",
+                "current_turn": room.current_turn.value,
             })
 
     try:
@@ -106,9 +113,7 @@ async def game_ws(
 
     except WebSocketDisconnect:
         room.connections.pop(uid, None)
-        # Notify remaining player
         for conn in room.connections.values():
             await conn.send_json({"type": "opponent_disconnected"})
-        # Clean up finished or empty rooms
         if not room.connections:
             room_manager.remove_room(room_id)
